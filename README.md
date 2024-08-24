@@ -8,5 +8,5 @@ The travel time tti(e, t) of a vehicle i on an edge e at time t is given by the 
 - read statement: 15m -> 13
 - chose simulation/visualization library: 5m -> 4m (Manim)
 - setup + learn Manim: 1h -> 19m
-- make the simulation: 4h -> 8:15
+- make the simulation: 4h -> 30m + 12:00
 - Rmarkdown/Jupyter Notebook with commetns
