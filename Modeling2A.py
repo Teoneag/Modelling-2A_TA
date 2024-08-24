@@ -31,7 +31,7 @@ def probability_denominator(node,initializing):
             total += 1/edge_info[edge][0] #Using freeflow if roads are empty
         elif edges_vehicles[edge] >= edge_info[edge][1]:
             if initializing == 1:
-                edge_info[edge][2] += 1 # Congestion in terms of cars that cant enter the road counter
+                edge_info[edge][2] += 1 # Congestion in terms of cars that can't enter the road counter
         else:
             total += probability_numerator(edge)
     if total == 0:
@@ -68,6 +68,8 @@ start_time = time.time()
 peak_hour = False
 initializing = 0
 
+position_log = []
+
 for min in range(1,241):
     if min > 120: 
         initializing = 1
@@ -77,32 +79,37 @@ for min in range(1,241):
         incoming_traffic = round(np.random.normal(95,1))
     for car in range(1,incoming_traffic+1):
         vehicle_id += 1
-        vehicles[vehicle_id] = [initializing, "1", 0, 0, "", 0, 0, ""] # part of initiliazation or not, Current place, time left on road, total time spent, route 
+        vehicles[vehicle_id] = [initializing, "1", 0, 0, "", 0, 0, "", min]
+        position_log.append([vehicle_id, min, "1"]) # Log initial position at City 1
     for car in vehicles:
         if vehicles[car][1] != "2":
-            vehicles[car][3] += 1 #adds minute to total expired time if vehicle has not arrived at city 2 
-        if vehicles[car][1] in node_out_edges.keys(): # Checks if  the vehicle is currently at a node inbetween edges
+            vehicles[car][3] += 1 
+        if vehicles[car][1] in node_out_edges.keys():
             prob_list = []
             for out_edge in node_out_edges[vehicles[car][1]]:  
                 prob_list.append(probability(vehicles[car][1],out_edge,initializing))
             if sum(prob_list) < 0.99:
                 vehicles[car][6] += 1
                 vehicles[car][7] += vehicles[car][1]
+                position_log.append([car, min, vehicles[car][1]]) # Log position and waiting time
                 continue
-            next_edge = np.random.choice(node_out_edges[vehicles[car][1]],p = prob_list) #stochastically pick next edge based on probabilties defined in functions at the start
-            vehicles[car][1] = next_edge #updates where vehicle is currently
-            vehicles[car][4] += (next_edge + " ") #updates road taken
+            next_edge = np.random.choice(node_out_edges[vehicles[car][1]],p = prob_list)
+            vehicles[car][1] = next_edge 
+            vehicles[car][4] += (next_edge + " ") 
             tt = travelTime(edge_info[next_edge][0],edges_vehicles[next_edge],edge_info[next_edge][1],alpha,beta)
             vehicles[car][5] += edge_info[next_edge][0]
-            vehicles[car][2] = tt #updates travel time
+            vehicles[car][2] = tt 
             if initializing == 1: 
                 edge_times[next_edge].append(tt) 
             edges_vehicles[next_edge] += 1
-        if vehicles[car][1] not in node_out_edges.keys() and vehicles[car][1] != "2": # checks if vehicle is at an edge
-            vehicles[car][2] -= 1 # takes a minute of the travel time
-            if vehicles[car][2] < 0: # checks if travel time has expired. 
-                edges_vehicles[vehicles[car][1]] -= 1 #remove vehicle from edge amount counter
-                vehicles[car][1] = vehicles[car][1].split("_")[1] #updates vehicle position
+            position_log.append([car, min, next_edge]) # Log position at the new edge
+        if vehicles[car][1] not in node_out_edges.keys() and vehicles[car][1] != "2":
+            vehicles[car][2] -= 1 
+            if vehicles[car][2] < 0:
+                edges_vehicles[vehicles[car][1]] -= 1 
+                vehicles[car][1] = vehicles[car][1].split("_")[1]
+                position_log.append([car, min, vehicles[car][1]]) # Log position after edge traversal
+
 
 print("Simulation Time: --- %s seconds ---" % (time.time() - start_time))
 
@@ -112,6 +119,8 @@ freeflow_time = []
 congestions = []
 minutes_waited = []
 where_waited = []
+entry_times = [] # New list to hold the entry times
+
 for car in vehicles: 
     if vehicles[car][0] == 1 and vehicles[car][1] == "2":
         travel_time.append(vehicles[car][3])
@@ -119,11 +128,12 @@ for car in vehicles:
         freeflow_time.append(vehicles[car][5])
         minutes_waited.append(vehicles[car][6])
         where_waited.append(vehicles[car][7])
+        entry_times.append(vehicles[car][8]) # Append the entry time to the list
 
 for edge in edge_info:
     congestions.append(edge_info[edge][2])
 
-df1 = pd.DataFrame({'Total Travel Time': travel_time, 'Route': route, 'Freeflow Time': freeflow_time, 'Minutes Waited': minutes_waited, 'Where?': where_waited})
+df1 = pd.DataFrame({'Total Travel Time': travel_time, 'Route': route, 'Freeflow Time': freeflow_time, 'Minutes Waited': minutes_waited, 'Where?': where_waited, 'Entry Time': entry_times}) # Include the entry time in the DataFrame
 df2 = pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in edge_times.items() ]))
 df3 = pd.DataFrame({"Edge": edge_info.keys(), "Individual Car Congestions": congestions })
 
@@ -131,3 +141,12 @@ with pd.ExcelWriter("test.xlsx") as writer:
     df1.to_excel(writer, sheet_name = "Sheet1")
     df2.to_excel(writer, sheet_name = "Sheet2")
     df3.to_excel(writer, sheet_name = "Sheet3")
+
+
+# Store the position log 
+df4 = pd.DataFrame(position_log, columns=['Vehicle ID', 'Time', 'Position'])
+with pd.ExcelWriter("test.xlsx") as writer:
+    df1.to_excel(writer, sheet_name = "Sheet1")
+    df2.to_excel(writer, sheet_name = "Sheet2")
+    df3.to_excel(writer, sheet_name = "Sheet3")
+    df4.to_excel(writer, sheet_name = "Sheet4") # New sheet with position log
