@@ -52,8 +52,61 @@ class TrafficGraph(Scene):
         self.play(Create(graph))
         self.wait()
 
-        # Example: Move a "vehicle" (dot) along an edge
-        vehicle = Dot(graph.vertices["City1"].get_center(), color=YELLOW)
-        self.add(vehicle)
-        self.play(MoveAlongPath(vehicle, graph.edges[("City1", "A")]))
-        self.wait()
+        # Define car data
+        car_data = {
+            1: {"path": ["City1", "A", "C", "City2"], "waiting": [0, 5, 0, 0], "travel": [10, 20, 30]},
+            2: {"path": ["City1", "B", "C", "D", "City2"], "waiting": [0, 3, 0, 2, 0], "travel": [12, 18, 15, 25]},
+            3: {"path": ["City1", "A", "C", "E", "City2"], "waiting": [0, 0, 4, 0, 0], "travel": [11, 22, 19, 28]},
+            4: {"path": ["City1", "B", "C", "E", "City2"], "waiting": [0, 2, 0, 0, 0], "travel": [13, 17, 21, 29]},
+            5: {"path": ["City1", "A", "C", "D", "City2"], "waiting": [0, 6, 0, 0, 0], "travel": [10, 25, 18, 30]},
+        }
+
+        # Create and position cars
+        vehicles = {}
+        for car_id, data in car_data.items():
+            start_position = graph.vertices[data["path"][0]].get_center()
+            vehicle = Dot(start_position, color=YELLOW)
+            self.add(vehicle)
+            vehicles[car_id] = {
+                "dot": vehicle,
+                "path": data["path"],
+                "waiting": data["waiting"],
+                "travel": data["travel"],
+                "current_edge_index": 0,
+                "remaining_travel_time": 0,
+                "waiting_time_at_node": data["waiting"][0]
+            }
+
+        # Simulation step-by-step
+        max_steps = max(len(data["path"]) for data in car_data.values())
+        for step in range(max_steps):
+            for car_id, vehicle_data in vehicles.items():
+                dot = vehicle_data["dot"]
+                path = vehicle_data["path"]
+                waiting_times = vehicle_data["waiting"]
+                travel_times = vehicle_data["travel"]
+                current_index = vehicle_data["current_edge_index"]
+                
+                # Update waiting time
+                if vehicle_data["waiting_time_at_node"] > 0:
+                    vehicle_data["waiting_time_at_node"] -= 1
+                    continue
+                
+                # Move to the next edge if at a vertex and waiting time is 0
+                if current_index < len(path) - 1:
+                    current_node = path[current_index]
+                    next_node = path[current_index + 1]
+                    
+                    if (current_node, next_node) in graph.edges:
+                        edge = graph.edges[(current_node, next_node)]
+                        travel_time = travel_times[current_index]
+                        # Animate movement
+                        self.play(MoveAlongPath(dot, edge), run_time=travel_time)
+                        
+                        # Update car data
+                        vehicle_data["current_edge_index"] += 1
+                        vehicle_data["waiting_time_at_node"] = waiting_times[current_index + 1]
+            
+            self.wait(1)  # Wait a bit before moving to the next step
+
+        self.wait(2)  # Pause at the end of the animation
