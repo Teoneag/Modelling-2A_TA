@@ -1,6 +1,7 @@
 import pygame
 import pandas as pd
 import time
+import math
 
 # Load the traffic log and edge capacity data from the previous simulation
 df_traffic_log = pd.read_excel("test.xlsx", sheet_name="Traffic Log")
@@ -21,9 +22,10 @@ pygame.display.set_caption("Traffic Simulation")
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-BLUE = (0, 0, 255)
+PURPLE = (208, 204, 252)
 GREEN = (0, 255, 0)
 GRAY = (200, 200, 200)
+ORANGE = (255, 132, 4)
 
 # Set up node positions with increased distance
 node_positions = {
@@ -51,25 +53,55 @@ edges = {
 
 # Button properties
 button_font = pygame.font.Font(None, 36)
-button_width, button_height = 150, 50
-start_stop_button_pos = (int(width * 0.05), int(height * 0.9))
-step_button_pos = (int(width * 0.3), int(height * 0.9))
-step_back_button_pos = (int(width * 0.475), int(height * 0.9))  # New position
-restart_button_pos = (int(width * 0.65), int(height * 0.9))  # Adjusted position
+button_width, button_height = 190, 50
+large_space = 155
+small_space = 40
 
-# Function to draw buttons
+# Slider properties
+slider_width = 200
+slider_height = 10
+slider_handle_width = 20
+slider_min_speed = 0.01  # Minimum sleep time (faster simulation)
+slider_max_speed = 1.0  # Maximum sleep time (slower simulation)
+slider_range = slider_max_speed - slider_min_speed
+slider_handle_radius = slider_handle_width // 2
+
+# Calculate slider and button positions
+start_stop_button_pos = (int(width * 0.05), int(height * 0.9))
+step_button_pos = (start_stop_button_pos[0] + button_width + large_space, int(height * 0.9))
+step_back_button_pos = (step_button_pos[0] + button_width + small_space, int(height * 0.9))
+slider_label_pos = (step_back_button_pos[0] + button_width * 1.5 + small_space, int(height * 0.9) + 20)
+restart_button_pos = (slider_label_pos[0] + slider_width // 2 + large_space, int(height * 0.9))
+slider_x = slider_label_pos[0] - (slider_width // 2)
+slider_y = slider_label_pos[1] + 10
+slider_handle_pos = slider_x + slider_width // 2
+slider_handle_area = pygame.Rect(slider_x - slider_handle_radius, slider_y - 10 - slider_handle_radius, slider_width + slider_handle_width, slider_height + 20)
+
 def draw_button(text, position, color):
     pygame.draw.rect(screen, color, (*position, button_width, button_height))
     text_surf = button_font.render(text, True, BLACK)
-    screen.blit(text_surf, (position[0] + 20, position[1] + 10))
+    text_rect = text_surf.get_rect(center=(position[0] + button_width // 2, position[1] + button_height // 2))
+    screen.blit(text_surf, text_rect)
 
-# Function to check if a point is inside a rectangle
+def draw_slider():
+    pygame.draw.rect(screen, BLACK, (slider_x, slider_y, slider_width, slider_height))
+    pygame.draw.rect(screen, GREEN, (slider_handle_pos - slider_handle_width // 2, slider_y - 10, slider_handle_width, slider_height + 20))
+
+def draw_slider_label():
+    label_font = pygame.font.Font(None, 36)
+    label_text = label_font.render("Simulation Speed", True, BLACK)
+    label_rect = label_text.get_rect(midbottom=(slider_label_pos[0], slider_label_pos[1]))  # Centered and positioned above the slider
+    screen.blit(label_text, label_rect)
+
+def get_slider_value():
+    return slider_max_speed - (slider_handle_pos - slider_x) / slider_width * slider_range
+
+# Check if a point is inside a rectangle
 def is_inside(pos, rect):
     x, y = pos
     rx, ry, rw, rh = rect
     return rx <= x <= rx + rw and ry <= y <= ry + rh
 
-# Function to draw the graph
 def draw_graph(traffic_data=None):
     screen.fill(WHITE)
 
@@ -77,36 +109,66 @@ def draw_graph(traffic_data=None):
     for edge, (start, end) in edges.items():
         pygame.draw.line(screen, BLACK, node_positions[start], node_positions[end], 5)
         
-        # Display the number of cars on the edge and capacity usage if traffic_data is provided
         if traffic_data:
             cars_on_edge = traffic_data.get(edge, 0)
-            capacity = edge_info.get(edge, {}).get('Capacity', 1)  # Retrieve the capacity for the edge
+            capacity = edge_info.get(edge, {}).get('Capacity', 1)
             percentage_used = (cars_on_edge / capacity) * 100
-            # Display format: 'cars_on_edge / capacity (percentage%)'
             text = f"{percentage_used:.0f}% ({cars_on_edge} / {capacity})"
             font = pygame.font.Font(None, 36)
             rendered_text = font.render(text, True, RED)
-            mid_point = (
-                (node_positions[start][0] + node_positions[end][0]) // 2,
-                (node_positions[start][1] + node_positions[end][1]) // 2
-            )
-            screen.blit(rendered_text, mid_point)
+
+            # Calculate the midpoint and direction vector for text positioning
+            start_pos = pygame.math.Vector2(node_positions[start])
+            end_pos = pygame.math.Vector2(node_positions[end])
+            direction = end_pos - start_pos
+            direction.normalize_ip()
+            mid_point = start_pos + direction * (start_pos.distance_to(end_pos) / 2)
+
+            # Adjust the position further away from nodes "1" or "2" if they are endpoints
+            if start in {"1", "2"}:
+                mid_point += direction * 20  # Move text further along the edge away from "1" or "2"
+            elif end in {"1", "2"}:
+                mid_point -= direction * 20  # Move text further along the edge away from "1" or "2"
+
+            # Compute angle to rotate the text
+            angle = math.degrees(math.atan2(direction.y, direction.x))
+            rotated_text = pygame.transform.rotate(rendered_text, -angle)
+
+            # Position the text slightly away from the line
+            text_rect = rotated_text.get_rect(center=mid_point)
+            offset = 25
+            screen.blit(rotated_text, text_rect.move(0, offset))
+
+    special_nodes = {"1", "2"}
 
     # Draw nodes (vertices)
     for node, pos in node_positions.items():
-        pygame.draw.circle(screen, BLUE, pos, 20)
+        is_special_node = node in special_nodes
+        node_color = ORANGE if is_special_node else PURPLE
+        node_radius = 80 if is_special_node else 40
+        node = "City " + node if is_special_node else node
 
-        # Display the number of cars on the vertex if traffic_data is provided
-        if traffic_data:
-            cars_on_node = traffic_data.get(node, 0)
-            font = pygame.font.Font(None, 36)
-            text = font.render(str(cars_on_node), True, RED)
-            screen.blit(text, (pos[0] + 25, pos[1] - 25))
+        # Draw the black outline
+        pygame.draw.circle(screen, BLACK, pos, node_radius + 2)
+        pygame.draw.circle(screen, node_color, pos, node_radius)
 
-    # Draw buttons
+        # Display the node's name and number of cars inside the node
+        font = pygame.font.Font(None, 36)
+        node_text = font.render(node, True, BLACK)
+        cars_text = font.render(str(traffic_data.get(node, 0)), True, RED)
+
+        node_text_rect = node_text.get_rect(center=(pos[0], pos[1] - 10))
+        cars_text_rect = cars_text.get_rect(center=(pos[0], pos[1] + 20))
+
+        screen.blit(node_text, node_text_rect)
+        screen.blit(cars_text, cars_text_rect)
+
+    # Draw controls
     draw_button("Start/Stop", start_stop_button_pos, GREEN)
-    draw_button("Step forward", step_button_pos, BLUE)
-    draw_button("Step Back", step_back_button_pos, BLUE)  # Blue button
+    draw_button("Step Forward", step_button_pos, PURPLE)
+    draw_button("Step Back", step_back_button_pos, PURPLE)
+    draw_slider_label()
+    draw_slider()
     draw_button("Reset", restart_button_pos, GRAY)
 
     pygame.display.flip()
@@ -115,6 +177,7 @@ def draw_graph(traffic_data=None):
 running = True
 paused = True
 index = 0
+slider_dragging = False
 clock = pygame.time.Clock()
 
 while running:
@@ -144,13 +207,25 @@ while running:
                 index = 0
                 paused = True
 
+            # Slider handle dragging
+            if slider_handle_area.collidepoint(mouse_pos):
+                slider_dragging = True
+                slider_handle_pos = min(max(mouse_pos[0], slider_x), slider_x + slider_width)
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            slider_dragging = False
+
+        if event.type == pygame.MOUSEMOTION:
+            if slider_dragging:
+                slider_handle_pos = min(max(event.pos[0], slider_x), slider_x + slider_width)
+
     traffic_data = df_traffic_log.iloc[index].to_dict()
     draw_graph(traffic_data)
 
     if not paused and index < len(df_traffic_log):
         index += 1
-        time.sleep(0.1)
+        time.sleep(get_slider_value())
 
-    clock.tick(60) 
+    clock.tick(60)
 
 pygame.quit()
