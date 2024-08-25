@@ -148,7 +148,7 @@ df1 = pd.DataFrame({
     'Minutes Waited': minutes_waited, 'Where?': where_waited
 })
 df2 = pd.DataFrame(dict([ (k, pd.Series(v)) for k, v in edge_times.items() ]))
-df3 = pd.DataFrame({"Edge": edge_info.keys(), "Individual Car Congestions": congestions })
+df3 = pd.DataFrame({"Edge": edge_info.keys(), "Capacity": [info[1] for info in edge_info.values()], "Individual Car Congestions": congestions })
 df4 = pd.DataFrame(traffic_log)  # Create a DataFrame for the traffic log
 
 with pd.ExcelWriter("test.xlsx") as writer:
