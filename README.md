@@ -12,8 +12,9 @@ The travel time tti(e, t) of a vehicle i on an edge e at time t is given by the 
 - visualization with pygame: 1:45
 - capacity for each road: 10m -> 45m
 - step button: 10m
-- style: better position everything, add icons: 10m -> 43m + 3:33 ->
-  - Intensitate culoare pt trafic
+- style: better position everything, add icons: 10m -> 2:46
+- Intensitate culoare for traffic: 20m -> 5:36
+  - inverse step forward and sep back buttons
 - show at each edge the decisions: 20m -> 7m + 
   - modify this to show at each intersection where multiple routes are available the probability with wich each route is chosen (
 - Rmarkdown/Jupyter Notebook with commetns

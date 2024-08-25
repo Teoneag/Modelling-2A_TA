@@ -68,9 +68,9 @@ slider_handle_radius = slider_handle_width // 2
 
 # Calculate slider and button positions
 start_stop_button_pos = (int(width * 0.05), int(height * 0.9))
-step_button_pos = (start_stop_button_pos[0] + button_width + large_space, int(height * 0.9))
-step_back_button_pos = (step_button_pos[0] + button_width + small_space, int(height * 0.9))
-slider_label_pos = (step_back_button_pos[0] + button_width * 1.5 + small_space, int(height * 0.9) + 20)
+step_back_button_pos = (start_stop_button_pos[0] + button_width + large_space, int(height * 0.9))
+step_button_pos = (step_back_button_pos[0] + button_width + small_space, int(height * 0.9))
+slider_label_pos = (step_button_pos[0] + button_width * 1.5 + small_space, int(height * 0.9) + 20)
 restart_button_pos = (slider_label_pos[0] + slider_width // 2 + large_space, int(height * 0.9))
 slider_x = slider_label_pos[0] - (slider_width // 2)
 slider_y = slider_label_pos[1] + 10
@@ -102,42 +102,64 @@ def is_inside(pos, rect):
     rx, ry, rw, rh = rect
     return rx <= x <= rx + rw and ry <= y <= ry + rh
 
+def get_edge_color(percentage_used):
+    """
+    Calculate the color of the edge based on its traffic usage percentage.
+    0% -> green (0, 255, 0)
+    100% -> red (255, 0, 0)
+    """
+    # Interpolate between green and red
+    red = int(255 * (percentage_used / 100))
+    green = int(255 * (1 - (percentage_used / 100)))
+    return (red, green, 0)
+
 def draw_graph(traffic_data=None):
     screen.fill(WHITE)
 
     # Draw edges
     for edge, (start, end) in edges.items():
-        pygame.draw.line(screen, BLACK, node_positions[start], node_positions[end], 5)
+        cars_on_edge = traffic_data.get(edge, 0) if traffic_data else 0
+        capacity = edge_info.get(edge, {}).get('Capacity', 1)
+        percentage_used = (cars_on_edge / capacity) * 100 if capacity > 0 else 0
         
-        if traffic_data:
-            cars_on_edge = traffic_data.get(edge, 0)
-            capacity = edge_info.get(edge, {}).get('Capacity', 1)
-            percentage_used = (cars_on_edge / capacity) * 100
-            text = f"{percentage_used:.0f}% ({cars_on_edge} / {capacity})"
-            font = pygame.font.Font(None, 36)
-            rendered_text = font.render(text, True, RED)
+        # Determine the color of the edge based on its usage
+        edge_color = get_edge_color(percentage_used)
+        
+        # Draw the edge with the computed color
+        pygame.draw.line(screen, edge_color, node_positions[start], node_positions[end], 5)
 
-            # Calculate the midpoint and direction vector for text positioning
-            start_pos = pygame.math.Vector2(node_positions[start])
-            end_pos = pygame.math.Vector2(node_positions[end])
-            direction = end_pos - start_pos
-            direction.normalize_ip()
-            mid_point = start_pos + direction * (start_pos.distance_to(end_pos) / 2)
+        # Draw traffic information text
+        text = f"{percentage_used:.0f}% ({cars_on_edge} / {capacity})"
+        font = pygame.font.Font(None, 36)
+        rendered_text = font.render(text, True, BLACK)
 
-            # Adjust the position further away from nodes "1" or "2" if they are endpoints
-            if start in {"1", "2"}:
-                mid_point += direction * 20  # Move text further along the edge away from "1" or "2"
-            elif end in {"1", "2"}:
-                mid_point -= direction * 20  # Move text further along the edge away from "1" or "2"
+        # Calculate the midpoint and direction vector for text positioning
+        start_pos = pygame.math.Vector2(node_positions[start])
+        end_pos = pygame.math.Vector2(node_positions[end])
+        direction = end_pos - start_pos
+        direction.normalize_ip()
+        mid_point = start_pos + direction * (start_pos.distance_to(end_pos) / 2)
 
-            # Compute angle to rotate the text
-            angle = math.degrees(math.atan2(direction.y, direction.x))
-            rotated_text = pygame.transform.rotate(rendered_text, -angle)
+        # Adjust the position further away from nodes "1" or "2" if they are endpoints
+        offset = 0
+        if direction.y < 0:  # Upward edge
+            offset = 28
+        else:  # Downward edge
+            offset = 15
+        if start in {"1", "2"}:
+            mid_point += direction * offset  # Move text further along the edge away from "1" or "2"
+        elif end in {"1", "2"}:
+            mid_point -= direction * offset  # Move text further along the edge away from "1" or "2"
 
-            # Position the text slightly away from the line
-            text_rect = rotated_text.get_rect(center=mid_point)
-            offset = 25
-            screen.blit(rotated_text, text_rect.move(0, offset))
+
+        # Compute angle to rotate the text
+        angle = math.degrees(math.atan2(direction.y, direction.x))
+        rotated_text = pygame.transform.rotate(rendered_text, -angle)
+
+        # Position the text slightly away from the line
+        text_rect = rotated_text.get_rect(center=mid_point)
+        offset = 25
+        screen.blit(rotated_text, text_rect.move(0, offset))
 
     special_nodes = {"1", "2"}
 
@@ -172,6 +194,7 @@ def draw_graph(traffic_data=None):
     draw_button("Reset", restart_button_pos, GRAY)
 
     pygame.display.flip()
+
 
 # Main loop to animate traffic based on the log data
 running = True
